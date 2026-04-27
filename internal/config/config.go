@@ -50,7 +50,7 @@ func GetAuthHeader() (string, error) {
 	if token := viper.GetString("token"); token != "" {
 		return "Bearer " + token, nil
 	}
-	return "", fmt.Errorf("not authenticated — run 'skaledata login' or 'skaledata auth set-key'")
+	return "", fmt.Errorf("not authenticated — run 'skale login' or 'skale auth set-key'")
 }
 
 // APIURL returns the configured API base URL.

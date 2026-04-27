@@ -70,7 +70,7 @@ func runClustersList(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(clusters) == 0 {
-		fmt.Println("No clusters found. Create one with: skaledata clusters create")
+		fmt.Println("No clusters found. Create one with: skale clusters create")
 		return nil
 	}
 
@@ -156,7 +156,7 @@ func runClustersCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Cluster %q created (ID: %s, status: %s)\n", cluster.Name, cluster.PublicID, cluster.Status)
-	fmt.Printf("Track progress: skaledata clusters status %s\n", cluster.PublicID)
+	fmt.Printf("Track progress: skale clusters status %s\n", cluster.PublicID)
 	return nil
 }
 
@@ -236,7 +236,7 @@ func runClustersDestroy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Destroy initiated for cluster %q. Track progress: skaledata clusters status %s\n",
+	fmt.Printf("Destroy initiated for cluster %q. Track progress: skale clusters status %s\n",
 		cluster.Name, cluster.PublicID)
 	return nil
 }

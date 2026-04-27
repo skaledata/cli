@@ -13,7 +13,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the CLI version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("skaledata %s\n", Version)
+		fmt.Printf("skale %s\n", Version)
 	},
 }
 

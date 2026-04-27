@@ -215,6 +215,6 @@ func writeProjectFiles(dir string, files map[string]string) error {
 	fmt.Printf("Project created in ./%s\n", dir)
 	fmt.Println("\nNext steps:")
 	fmt.Println("  cd", dir)
-	fmt.Println("  skaledata deploy")
+	fmt.Println("  skale deploy")
 	return nil
 }

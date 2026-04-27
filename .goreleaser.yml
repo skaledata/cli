@@ -2,7 +2,7 @@ version: 2
 
 builds:
   - main: .
-    binary: skaledata
+    binary: skale
     ldflags:
       - -s -w
       - -X github.com/skaledata/cli/cmd.Version={{ .Version }}
@@ -15,7 +15,7 @@ builds:
 
 archives:
   - formats: [tar.gz]
-    name_template: "skaledata_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "skale_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
@@ -24,14 +24,14 @@ brews:
   - repository:
       owner: skaledata
       name: homebrew-tap
-    name: skaledata
+    name: skale
     homepage: "https://skaledata.com"
     description: "SkaleData CLI — manage clusters, apps, and deployments"
     license: "MIT"
     install: |
-      bin.install "skaledata"
+      bin.install "skale"
     test: |
-      system "#{bin}/skaledata", "version"
+      system "#{bin}/skale", "version"
 
 release:
   github:

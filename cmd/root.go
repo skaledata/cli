@@ -11,7 +11,7 @@ import (
 var cfgFile string
 
 var rootCmd = &cobra.Command{
-	Use:   "skaledata",
+	Use:   "skale",
 	Short: "SkaleData CLI — manage clusters, apps, and deployments",
 	Long:  `The SkaleData CLI wraps the SkaleData API to let you create clusters, manage applications, deploy code, and scaffold new projects from your terminal.`,
 }
@@ -45,7 +45,7 @@ func initConfig() {
 	viper.SetEnvPrefix("SKALEDATA")
 	viper.AutomaticEnv()
 
-	viper.SetDefault("api_url", "https://api.dev.skaledata.com")
+	viper.SetDefault("api_url", "https://api.skaledata.com")
 
 	_ = viper.ReadInConfig()
 }

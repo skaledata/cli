@@ -103,7 +103,7 @@ func runAppsAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Adding %s to cluster %q. An upgrade is in progress.\n", appType, cluster.Name)
-	fmt.Printf("Track progress: skaledata clusters status %s\n", cluster.PublicID)
+	fmt.Printf("Track progress: skale clusters status %s\n", cluster.PublicID)
 	return nil
 }
 

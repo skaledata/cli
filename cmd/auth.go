@@ -47,7 +47,7 @@ func init() {
 	authCmd.AddCommand(setKeyCmd)
 	authCmd.AddCommand(logoutCmd)
 
-	// Also add `skaledata login` as a top-level alias for convenience
+	// Also add `skale login` as a top-level alias for convenience
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "login",
 		Short: "Log in via browser (alias for 'auth login')",
