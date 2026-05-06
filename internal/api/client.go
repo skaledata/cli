@@ -46,6 +46,11 @@ func NewClient() (*Client, error) {
 	}, nil
 }
 
+// SetAuth overrides the authorization header (used during login before config is written).
+func (c *Client) SetAuth(header string) {
+	c.authHeader = header
+}
+
 // Get performs an authenticated GET request.
 func (c *Client) Get(path string, result interface{}) error {
 	return c.do("GET", path, nil, result)
@@ -64,6 +69,74 @@ func (c *Client) Put(path string, body, result interface{}) error {
 // Delete performs an authenticated DELETE request.
 func (c *Client) Delete(path string, result interface{}) error {
 	return c.do("DELETE", path, nil, result)
+}
+
+// GetText performs an authenticated GET and returns the response as a string.
+func (c *Client) GetText(path string) (string, error) {
+	url := c.BaseURL + path
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", c.authHeader)
+	req.Header.Set("Accept", "text/plain")
+	req.Header.Set("User-Agent", "skaledata-cli/0.1.0")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		apiErr := &APIError{StatusCode: resp.StatusCode}
+		_ = json.Unmarshal(body, apiErr)
+		return "", apiErr
+	}
+	return string(body), nil
+}
+
+// PostMultipart performs an authenticated POST with a custom content type (for multipart uploads).
+func (c *Client) PostMultipart(path, contentType string, body []byte, result interface{}) error {
+	url := c.BaseURL + path
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", c.authHeader)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "skaledata-cli/0.1.0")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		apiErr := &APIError{StatusCode: resp.StatusCode}
+		_ = json.Unmarshal(respBody, apiErr)
+		return apiErr
+	}
+
+	if result != nil && len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, result); err != nil {
+			return fmt.Errorf("unmarshal response: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (c *Client) do(method, path string, body, result interface{}) error {

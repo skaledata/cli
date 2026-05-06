@@ -129,14 +129,16 @@ type DataPlaneTokenResponse struct {
 
 // DeployImageRequest is the body for POST /clusters/{id}/deploy-image.
 type DeployImageRequest struct {
-	AppType  string `json:"app_type"`
-	ImageTag string `json:"image_tag"`
+	AppType  string  `json:"app_type"`
+	AppName  *string `json:"app_name,omitempty"`
+	ImageTag string  `json:"image_tag"`
 }
 
 // DeployImageResponse from POST /clusters/{id}/deploy-image.
 type DeployImageResponse struct {
 	Status string `json:"status"`
 	Image  string `json:"image"`
+	App    string `json:"app,omitempty"`
 }
 
 // RegistryTokenResponse from POST /clusters/{id}/registry-token.
@@ -165,8 +167,74 @@ type SubscriptionResponse struct {
 	TrialDaysRemaining *int   `json:"trial_days_remaining"`
 }
 
+// PodSummary from the pods endpoint.
+type PodSummary struct {
+	Name         string   `json:"name"`
+	Status       string   `json:"status"`
+	Ready        bool     `json:"ready"`
+	RestartCount int      `json:"restart_count"`
+	Containers   []string `json:"containers"`
+	Age          string   `json:"age"`
+}
+
+// PodListResponse from GET /clusters/{id}/pods.
+type PodListResponse struct {
+	Namespace string       `json:"namespace"`
+	Pods      []PodSummary `json:"pods"`
+}
+
 // AddAppRequest is the body for POST /clusters/{id}/add-app.
 type AddAppRequest struct {
 	Name   string         `json:"name,omitempty"`
 	Config map[string]any `json:"config,omitempty"`
+}
+
+// ApiKeyCreateRequest is the body for POST /api-keys.
+type ApiKeyCreateRequest struct {
+	Name          string `json:"name"`
+	ExpiresInDays *int   `json:"expires_in_days,omitempty"`
+}
+
+// ApiKeyCreateResponse from POST /api-keys.
+type ApiKeyCreateResponse struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Key       string  `json:"key"`
+	KeyPrefix string  `json:"key_prefix"`
+	Scopes    []string `json:"scopes"`
+}
+
+// CloudCreateRequest is the body for POST /clouds.
+type CloudCreateRequest struct {
+	Provider            string  `json:"provider"`
+	DisplayName         string  `json:"display_name"`
+	ProjectID           *string `json:"project_id,omitempty"`
+	SAEmail             *string `json:"sa_email,omitempty"`
+	Region              string  `json:"region,omitempty"`
+	AWSAccountID        *string `json:"aws_account_id,omitempty"`
+	AWSRoleARN          *string `json:"aws_role_arn,omitempty"`
+	AWSRegion           *string `json:"aws_region,omitempty"`
+	AzureSubscriptionID *string `json:"azure_subscription_id,omitempty"`
+	AzureTenantID       *string `json:"azure_tenant_id,omitempty"`
+	AzureClientID       *string `json:"azure_client_id,omitempty"`
+	AzureResourceGroup  *string `json:"azure_resource_group,omitempty"`
+	AzureLocation       *string `json:"azure_location,omitempty"`
+}
+
+// DevCredentialsResponse from POST /applications/{id}/dev-credentials.
+type DevCredentialsResponse struct {
+	CloudProvider  string         `json:"cloud_provider"`
+	SecretsBackend string         `json:"secrets_backend"`
+	BackendKwargs  map[string]any `json:"backend_kwargs"`
+	Credentials    map[string]any `json:"credentials"`
+	CredentialType string         `json:"credential_type"`
+}
+
+// CloudTestResponse from POST /clouds/test.
+type CloudTestResponse struct {
+	Impersonation struct {
+		OK    bool    `json:"ok"`
+		Error *string `json:"error"`
+	} `json:"impersonation"`
+	Preflight map[string]any `json:"preflight"`
 }
