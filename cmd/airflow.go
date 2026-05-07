@@ -43,6 +43,13 @@ var airflowStopCmd = &cobra.Command{
 	RunE:  runAirflowStop,
 }
 
+var airflowRestartCmd = &cobra.Command{
+	Use:   "restart",
+	Short: "Restart all Airflow containers",
+	Long:  `Stops and restarts all containers without rebuilding. Preserves volumes and data. Useful after config changes.`,
+	RunE:  runAirflowRestart,
+}
+
 var airflowKillCmd = &cobra.Command{
 	Use:   "kill",
 	Short: "Kill all Airflow containers and delete volumes",
@@ -96,6 +103,7 @@ func init() {
 	airflowCmd.AddCommand(airflowInitCmd)
 	airflowCmd.AddCommand(airflowStartCmd)
 	airflowCmd.AddCommand(airflowStopCmd)
+	airflowCmd.AddCommand(airflowRestartCmd)
 	airflowCmd.AddCommand(airflowKillCmd)
 	airflowCmd.AddCommand(airflowBashCmd)
 	airflowCmd.AddCommand(airflowRunCmd)
@@ -167,6 +175,17 @@ func runAirflowStop(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("No Airflow project found in the current directory.")
 	}
 	return airflow.Stop(dir)
+}
+
+func runAirflowRestart(cmd *cobra.Command, args []string) error {
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if !airflow.IsProject(dir) {
+		return fmt.Errorf("No Airflow project found in the current directory.")
+	}
+	return airflow.Restart(dir)
 }
 
 func runAirflowKill(cmd *cobra.Command, args []string) error {

@@ -50,6 +50,10 @@ func FetchAndWriteSecrets(dir string, client *api.Client, appID string) (*api.De
 		if err := writeGCPCredentials(skaleDir, resp.Credentials, &envLines); err != nil {
 			return nil, err
 		}
+		// Google SDK needs project ID from env when using authorized_user credentials
+		if pid, ok := resp.BackendKwargs["project_id"].(string); ok && pid != "" {
+			envLines = append(envLines, fmt.Sprintf("GOOGLE_CLOUD_PROJECT=%s", pid))
+		}
 	case "aws_sts":
 		writeAWSCredentials(resp.Credentials, &envLines)
 	case "azure_ad_token":
@@ -76,27 +80,15 @@ func RefreshSecrets(dir string, client *api.Client, appID string) (*api.DevCrede
 }
 
 func writeGCPCredentials(skaleDir string, creds map[string]any, envLines *[]string) error {
-	// Write a credential JSON that the Google SDK can consume
+	// No credential file needed — we pass the access token via the
+	// Airflow google_cloud_default connection URI. The secrets backend
+	// is configured with gcp_conn_id to use this connection for auth,
+	// avoiding the refresh_token problem with credential files.
 	token, _ := creds["token"].(string)
-	credJSON := map[string]any{
-		"type":          "authorized_user",
-		"client_id":     "skaledata",
-		"client_secret": "",
-		"refresh_token": "",
-		"token":         token,
-	}
-	data, err := json.MarshalIndent(credJSON, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal GCP credentials: %w", err)
-	}
-
-	credPath := filepath.Join(skaleDir, "gcp-credentials.json")
-	if err := os.WriteFile(credPath, data, 0o600); err != nil {
-		return fmt.Errorf("write GCP credentials: %w", err)
-	}
-	fmt.Println("  Wrote .skale/gcp-credentials.json")
-
-	*envLines = append(*envLines, "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json")
+	connURI := fmt.Sprintf("google-cloud-platform://?token=%s&num_retries=3", token)
+	*envLines = append(*envLines,
+		fmt.Sprintf("AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT=%s", connURI),
+	)
 	return nil
 }
 

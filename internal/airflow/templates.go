@@ -37,6 +37,7 @@ const ComposeTemplate = `x-airflow-common: &airflow-common
     - ../webserver_config.py:/opt/airflow/webserver_config.py:ro
     - airflow-logs:/opt/airflow/logs
     - ../.skale/gcp-credentials.json:/tmp/gcp-credentials.json:ro
+    - ../.skale/gcp-access-token:/tmp/gcp-access-token:ro
     - ../.skale/azure-token.json:/tmp/azure-token.json:ro
   depends_on:
     postgres:

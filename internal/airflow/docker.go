@@ -33,7 +33,7 @@ func ensureCompose(dir string) error {
 	// Ensure credential placeholders exist so volume mounts don't fail.
 	// Real credentials are written by FetchAndWriteSecrets when a project is
 	// bound to a deployed instance.
-	for _, name := range []string{"gcp-credentials.json", "azure-token.json"} {
+	for _, name := range []string{"gcp-credentials.json", "gcp-access-token", "azure-token.json"} {
 		credPath := filepath.Join(skaleDir, name)
 		if _, err := os.Stat(credPath); os.IsNotExist(err) {
 			if err := os.WriteFile(credPath, []byte("{}"), 0o600); err != nil {
@@ -126,6 +126,15 @@ func RestartServices(dir string) error {
 		return err
 	}
 	return compose(dir, "restart", "api-server", "scheduler", "dag-processor", "triggerer")
+}
+
+// Restart stops and restarts all services without rebuilding.
+func Restart(dir string) error {
+	if err := ensureCompose(dir); err != nil {
+		return err
+	}
+	fmt.Println("Restarting Airflow...")
+	return compose(dir, "restart")
 }
 
 // Stop gracefully stops all services (preserves volumes).
