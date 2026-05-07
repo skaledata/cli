@@ -25,7 +25,7 @@ type DeployOpts struct {
 	AppName    string // target airflow instance name (for multi-instance clusters)
 	Tag        string
 	ForceImage bool // always do an image build, even if only DAGs changed
-	ForceDags  bool // always do a DAG sync, even if image files changed
+	ForceDags  bool // DAG-only sync — upload to blob storage without building an image
 }
 
 // imageFiles are files/directories that trigger a full image build when changed.

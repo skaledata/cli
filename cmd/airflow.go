@@ -114,7 +114,7 @@ func init() {
 	airflowDeployCmd.Flags().String("app", "", "Airflow instance name (for clusters with multiple Airflows)")
 	airflowDeployCmd.Flags().String("tag", "", "Image tag (defaults to git SHA)")
 	airflowDeployCmd.Flags().Bool("force-image", false, "Force a full image build even if only DAGs changed")
-	airflowDeployCmd.Flags().Bool("force-dags", false, "Force a DAG-only sync even if image files changed")
+	airflowDeployCmd.Flags().Bool("dag-only", false, "Upload DAGs to blob storage without building an image")
 }
 
 func runAirflowInit(cmd *cobra.Command, args []string) error {
@@ -291,7 +291,7 @@ func runAirflowDeploy(cmd *cobra.Command, args []string) error {
 	appName, _ := cmd.Flags().GetString("app")
 	tag, _ := cmd.Flags().GetString("tag")
 	forceImage, _ := cmd.Flags().GetBool("force-image")
-	forceDags, _ := cmd.Flags().GetBool("force-dags")
+	forceDags, _ := cmd.Flags().GetBool("dag-only")
 
 	// Read saved config
 	cfg := airflow.LoadConfig(dir)
