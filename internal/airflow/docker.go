@@ -95,9 +95,9 @@ func Start(dir string, opts *StartOpts) error {
 
 func printSecretsInfo(resp *api.DevCredentialsResponse) {
 	backendNames := map[string]string{
-		"gcp_access_token": "Google Secret Manager",
-		"aws_sts":          "AWS Secrets Manager",
-		"azure_ad_token":   "Azure Key Vault",
+		"gcp_service_account_key": "Google Secret Manager",
+		"aws_sts":                 "AWS Secrets Manager",
+		"azure_ad_token":          "Azure Key Vault",
 	}
 	name := backendNames[resp.CredentialType]
 	if name == "" {
