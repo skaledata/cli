@@ -52,10 +52,10 @@ func FetchAndWriteSecrets(dir string, client *api.Client, appID string) (*api.De
 		}
 	case "aws_sts":
 		writeAWSCredentials(resp.Credentials, &envLines)
+	case "azure_client_secret":
+		writeAzureCredentials(resp.Credentials, &envLines)
 	case "azure_ad_token":
-		if err := writeAzureCredentials(skaleDir, resp.Credentials, &envLines); err != nil {
-			return nil, err
-		}
+		writeAzureCredentials(resp.Credentials, &envLines)
 	}
 
 	// Write .env preserving user-defined vars
@@ -115,32 +115,20 @@ func writeAWSCredentials(creds map[string]any, envLines *[]string) {
 	)
 }
 
-func writeAzureCredentials(skaleDir string, creds map[string]any, envLines *[]string) error {
+func writeAzureCredentials(creds map[string]any, envLines *[]string) {
 	tenantID, _ := creds["tenant_id"].(string)
 	clientID, _ := creds["client_id"].(string)
-	token, _ := creds["token"].(string)
+	clientSecret, _ := creds["client_secret"].(string)
 
-	// Write token to a file for the Azure SDK
-	tokenJSON := map[string]string{
-		"access_token": token,
-	}
-	data, err := json.MarshalIndent(tokenJSON, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal Azure token: %w", err)
-	}
-
-	tokenPath := filepath.Join(skaleDir, "azure-token.json")
-	if err := os.WriteFile(tokenPath, data, 0o600); err != nil {
-		return fmt.Errorf("write Azure token: %w", err)
-	}
-	fmt.Println("  Wrote .skale/azure-token.json")
-
+	// Set env vars for Azure SDK's EnvironmentCredential.
+	// The backend_kwargs also include tenant_id/client_id/client_secret
+	// for the AzureKeyVaultBackend constructor.
 	*envLines = append(*envLines,
-		fmt.Sprintf("AZURE_CLIENT_ID=%s", clientID),
 		fmt.Sprintf("AZURE_TENANT_ID=%s", tenantID),
+		fmt.Sprintf("AZURE_CLIENT_ID=%s", clientID),
+		fmt.Sprintf("AZURE_CLIENT_SECRET=%s", clientSecret),
 		"AZURE_AUTHORITY_HOST=https://login.microsoftonline.com",
 	)
-	return nil
 }
 
 // writeEnvFile writes auto-generated env vars to .env while preserving

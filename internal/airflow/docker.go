@@ -97,6 +97,7 @@ func printSecretsInfo(resp *api.DevCredentialsResponse) {
 	backendNames := map[string]string{
 		"gcp_service_account_key": "Google Secret Manager",
 		"aws_sts":                 "AWS Secrets Manager",
+		"azure_client_secret":     "Azure Key Vault",
 		"azure_ad_token":          "Azure Key Vault",
 	}
 	name := backendNames[resp.CredentialType]
