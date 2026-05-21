@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/browser"
+	"github.com/skaledata/cli/internal/api"
 	"github.com/skaledata/cli/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -125,9 +127,26 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	select {
 	case token := <-tokenCh:
 		server.Close()
-		if err := config.SaveToken(token); err != nil {
-			return fmt.Errorf("save token: %w", err)
+
+		// Use the short-lived Clerk JWT to mint a long-lived API key.
+		// Clerk JWTs expire in ~60s, so we do this immediately.
+		fmt.Println("Creating API key...")
+		apiKey, err := mintAPIKey(token)
+		if err != nil {
+			// Fall back to storing the JWT if key creation fails
+			fmt.Fprintf(os.Stderr, "Warning: could not create API key (%v), storing session token instead.\n", err)
+			fmt.Fprintln(os.Stderr, "Session tokens expire quickly. Run 'skale auth set-key' with an API key for long-lived auth.")
+			if err := config.SaveToken(token); err != nil {
+				return fmt.Errorf("save token: %w", err)
+			}
+		} else {
+			if err := config.SaveAPIKey(apiKey); err != nil {
+				return fmt.Errorf("save API key: %w", err)
+			}
+			// Clear any old JWT token
+			_ = config.SaveToken("")
 		}
+
 		fmt.Println("Logged in successfully!")
 		return nil
 	case err := <-errCh:
@@ -147,6 +166,22 @@ func runSetKey(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("API key saved.")
 	return nil
+}
+
+func mintAPIKey(jwtToken string) (string, error) {
+	client := &api.Client{
+		BaseURL:    config.APIURL(),
+		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+	}
+	client.SetAuth("Bearer " + jwtToken)
+
+	var result api.ApiKeyCreateResponse
+	if err := client.Post("/api-keys", api.ApiKeyCreateRequest{
+		Name: "skale-cli",
+	}, &result); err != nil {
+		return "", err
+	}
+	return result.Key, nil
 }
 
 func runLogout(cmd *cobra.Command, args []string) error {

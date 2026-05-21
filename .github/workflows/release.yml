@@ -26,4 +26,8 @@ jobs:
           version: latest
           args: release --clean
         env:
+          # GITHUB_TOKEN creates the GitHub release + uploads binaries
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # HOMEBREW_TAP_TOKEN pushes the formula to skaledata/homebrew-tap
+          # (PAT with repo scope, stored in repo secrets)
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

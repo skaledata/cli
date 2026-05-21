@@ -24,6 +24,7 @@ brews:
   - repository:
       owner: skaledata
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     name: skale
     homepage: "https://skaledata.com"
     description: "SkaleData CLI — manage clusters, apps, and deployments"
