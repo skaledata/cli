@@ -34,7 +34,6 @@ const ComposeTemplate = `x-airflow-common: &airflow-common
     - ../dags:/opt/airflow/dags
     - ../plugins:/opt/airflow/plugins
     - ../tests:/opt/airflow/tests
-    - ../webserver_config.py:/opt/airflow/webserver_config.py:ro
     - airflow-logs:/opt/airflow/logs
     - ../.skale/gcp-credentials.json:/tmp/gcp-credentials.json:ro
     - ../.skale/gcp-access-token:/tmp/gcp-access-token:ro
@@ -169,11 +168,6 @@ with DAG(
     sleepy_task.expand(i=list(range(120)))
 `
 
-// WebserverConfig disables the login screen for local development.
-const WebserverConfig = `"""Local dev webserver config — no login required."""
-AUTH_ROLE_PUBLIC = "Admin"
-`
-
 const RequirementsTxt = `# Add your Python dependencies here.
 # They are installed during 'skale airflow start' (docker build).
 #
@@ -186,7 +180,6 @@ const Gitignore = `__pycache__/
 *.pyc
 .env
 .skale/
-webserver_config.py
 logs/
 airflow.db
 airflow.cfg
