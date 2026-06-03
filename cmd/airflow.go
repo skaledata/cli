@@ -137,7 +137,9 @@ func runAirflowInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("Airflow project created! Next steps:")
 	fmt.Println("  skale airflow start     Start Airflow locally")
 	fmt.Println("  Edit dags/              Add your DAGs")
-	fmt.Println("  Edit requirements.txt   Add Python dependencies")
+	fmt.Println("  Edit requirements.txt   Add Python dependencies (pip)")
+	fmt.Println("  Edit packages.txt       Add OS packages (apt)")
+	fmt.Println("  Read README.md          Project layout, CLI commands, deploy workflow")
 	return nil
 }
 

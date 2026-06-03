@@ -27,8 +27,10 @@ func Init(dir string) error {
 
 	files := map[string]string{
 		"Dockerfile":          DockerfileTemplate,
+		"README.md":           ReadmeTemplate,
 		"dags/example_dag.py": ExampleDAG,
 		"requirements.txt":    RequirementsTxt,
+		"packages.txt":        PackagesTxt,
 		".gitignore":          Gitignore,
 		".dockerignore":       Dockerignore,
 	}
