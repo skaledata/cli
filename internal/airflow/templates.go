@@ -1,12 +1,27 @@
 package airflow
 
-// Dockerfile template for local Airflow 3 projects.
-const DockerfileTemplate = `FROM apache/airflow:3.1.7-python3.12
+// Dockerfile template for local Airflow 3 projects. The SkaleData base
+// image's ONBUILD layer handles requirements.txt + packages.txt at the
+// build-context root, so the customer's Dockerfile collapses to a FROM
+// line plus comments.
+const DockerfileTemplate = `FROM ghcr.io/skaledata/airflow:3.2.2
 
-COPY requirements.txt /opt/airflow/requirements.txt
-RUN pip install --no-cache-dir -r /opt/airflow/requirements.txt
-
-COPY dags/ /opt/airflow/dags/
+# The SkaleData Airflow base image pre-installs:
+#   - apache-airflow + apache-airflow-providers-airbyte
+#   - skale-airflow-plugins (Airbyte bearer-auth shim, etc.)
+#   - a default webserver_config.py
+#
+# It also auto-picks-up two files from this build context (no COPY/RUN needed):
+#   requirements.txt - pip-installed under upstream Airflow constraints
+#   packages.txt     - apt-installed
+#
+# DAGs are synced into your deployed cluster from blob storage by SkaleData's
+# sidecar. For local dev, the SkaleData CLI mounts ./dags into the container.
+#
+# Project-specific Airflow plugins go in ./plugins (also mounted locally,
+# COPY them in here if you need them in your deployed image).
+#
+# See https://docs.skaledata.com/airflow-base for everything that's baked in.
 `
 
 // ComposeTemplate is the docker-compose.yml for local Airflow 3 development.
@@ -168,12 +183,88 @@ with DAG(
     sleepy_task.expand(i=list(range(120)))
 `
 
-const RequirementsTxt = `# Add your Python dependencies here.
-# They are installed during 'skale airflow start' (docker build).
+const RequirementsTxt = `# Python dependencies for your Airflow image.
 #
-# apache-airflow-providers-google
-# pandas
-# dbt-core
+# Installed automatically by the SkaleData base image's ONBUILD layer
+# (pip install -r requirements.txt under the upstream Airflow constraints
+# file, so customer deps can't break the base image's pinned dep tree).
+#
+# Examples:
+#   apache-airflow-providers-google
+#   pandas
+#   dbt-snowflake
+`
+
+const PackagesTxt = `# OS packages for your Airflow image (one per line, apt-get install names).
+#
+# Installed automatically by the SkaleData base image's ONBUILD layer.
+#
+# Examples:
+#   curl
+#   jq
+#   build-essential
+`
+
+const ReadmeTemplate = `# SkaleData Airflow project
+
+Local development uses Docker Compose (orchestrated by the SkaleData CLI).
+Production runs on a SkaleData-managed Airflow cluster.
+
+## Project layout
+
+` + "```" + `
+.
+├── Dockerfile            # FROM ghcr.io/skaledata/airflow:<version> + comments
+├── README.md             # this file
+├── requirements.txt      # pip deps — auto-installed via ONBUILD
+├── packages.txt          # apt deps — auto-installed via ONBUILD
+├── dags/                 # your DAGs (example_dag.py to get you started)
+├── plugins/              # project-specific Airflow plugins
+└── tests/                # DAG tests (pytest)
+` + "```" + `
+
+The SkaleData base image (` + "`ghcr.io/skaledata/airflow`" + `) pre-installs
+common platform glue (Airbyte bearer-auth shim under
+` + "`skale.providers.airbyte.*`" + `, default webserver_config.py, etc.) — see
+[docs.skaledata.com/airflow-base](https://docs.skaledata.com/airflow-base)
+for the full list and how to override.
+
+## Local dev
+
+` + "```bash" + `
+skale airflow start          # build image + start all services
+skale airflow stop           # graceful stop (volumes preserved)
+skale airflow restart        # restart without rebuild
+skale airflow kill           # nuke containers + volumes (fresh start)
+skale airflow logs -f        # tail logs from all services
+skale airflow bash           # interactive shell in the scheduler
+` + "```" + `
+
+Once running:
+
+- **Airflow UI:** http://localhost:8080 (no login screen in local dev)
+- **Postgres:** localhost:5432 (` + "`airflow / airflow`" + `)
+
+## Adding dependencies
+
+- **Python:** add to ` + "`requirements.txt`" + `, then ` + "`skale airflow start`" + ` to rebuild.
+- **OS:** add to ` + "`packages.txt`" + `, then rebuild. Same flow.
+
+## Deploying to a SkaleData cluster
+
+` + "```bash" + `
+skale airflow deploy
+` + "```" + `
+
+This builds the image (with the same files you have locally), pushes to your
+cluster's Artifact Registry, and triggers a rolling restart of the scheduler,
+api-server, dag-processor, and triggerer.
+
+## Tests
+
+` + "```bash" + `
+skale airflow run pytest tests/
+` + "```" + `
 `
 
 const Gitignore = `__pycache__/
