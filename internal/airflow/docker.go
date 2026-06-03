@@ -25,11 +25,12 @@ func ensureCompose(dir string) error {
 	if err := os.WriteFile(composeFilePath(dir), []byte(ComposeTemplate), 0o644); err != nil {
 		return fmt.Errorf("write docker-compose.yml: %w", err)
 	}
-	// Write webserver_config.py to project root (mounted into container, disables login)
-	wcPath := filepath.Join(dir, "webserver_config.py")
-	if err := os.WriteFile(wcPath, []byte(WebserverConfig), 0o644); err != nil {
-		return fmt.Errorf("write webserver_config.py: %w", err)
-	}
+	// webserver_config.py is no longer managed by the CLI — the SkaleData
+	// Airflow base image (ghcr.io/skaledata/airflow:>=3.2.2) bakes a
+	// default AUTH_ROLE_PUBLIC="Admin" config in at
+	// /opt/airflow/webserver_config.py. Customers who need a stricter
+	// internal auth model can COPY their own in their Dockerfile or
+	// mount one via docker-compose.
 	// Ensure credential placeholders exist so volume mounts don't fail.
 	// Real credentials are written by FetchAndWriteSecrets when a project is
 	// bound to a deployed instance.
