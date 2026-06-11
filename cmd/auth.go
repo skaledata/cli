@@ -8,10 +8,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/pkg/browser"
-	"github.com/skaledata/cli/internal/api"
 	"github.com/skaledata/cli/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -128,26 +126,20 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	case token := <-tokenCh:
 		server.Close()
 
-		// Use the short-lived Clerk JWT to mint a long-lived API key.
-		// Clerk JWTs expire in ~60s, so we do this immediately.
-		fmt.Println("Creating API key...")
-		apiKey, err := mintAPIKey(token)
-		if err != nil {
-			// Fall back to storing the JWT if key creation fails
-			fmt.Fprintf(os.Stderr, "Warning: could not create API key (%v), storing session token instead.\n", err)
-			fmt.Fprintln(os.Stderr, "Session tokens expire quickly. Run 'skale auth set-key' with an API key for long-lived auth.")
-			if err := config.SaveToken(token); err != nil {
-				return fmt.Errorf("save token: %w", err)
-			}
-		} else {
-			if err := config.SaveAPIKey(apiKey); err != nil {
-				return fmt.Errorf("save API key: %w", err)
-			}
-			// Clear any old JWT token
-			_ = config.SaveToken("")
+		// Store the session JWT directly. Clerk's `skale-cli` JWT template
+		// (configured in the dashboard) gives this an 8h TTL — long enough
+		// to cover a workday, short enough that a leaked config file rots
+		// same-day. For headless / CI use, `skale auth set-key` still
+		// stores a long-lived API key.
+		if err := config.SaveToken(token); err != nil {
+			return fmt.Errorf("save token: %w", err)
 		}
+		// Clear any long-lived API key from a previous login so the new
+		// session token actually takes effect (api_key takes precedence
+		// over token in GetAuthHeader).
+		_ = config.SaveAPIKey("")
 
-		fmt.Println("Logged in successfully!")
+		fmt.Println("Logged in successfully! (session valid for ~8 hours)")
 		return nil
 	case err := <-errCh:
 		server.Close()
@@ -166,22 +158,6 @@ func runSetKey(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("API key saved.")
 	return nil
-}
-
-func mintAPIKey(jwtToken string) (string, error) {
-	client := &api.Client{
-		BaseURL:    config.APIURL(),
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
-	}
-	client.SetAuth("Bearer " + jwtToken)
-
-	var result api.ApiKeyCreateResponse
-	if err := client.Post("/api-keys", api.ApiKeyCreateRequest{
-		Name: "skale-cli",
-	}, &result); err != nil {
-		return "", err
-	}
-	return result.Key, nil
 }
 
 func runLogout(cmd *cobra.Command, args []string) error {
