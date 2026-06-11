@@ -189,21 +189,6 @@ type AddAppRequest struct {
 	Config map[string]any `json:"config,omitempty"`
 }
 
-// ApiKeyCreateRequest is the body for POST /api-keys.
-type ApiKeyCreateRequest struct {
-	Name          string `json:"name"`
-	ExpiresInDays *int   `json:"expires_in_days,omitempty"`
-}
-
-// ApiKeyCreateResponse from POST /api-keys.
-type ApiKeyCreateResponse struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Key       string  `json:"key"`
-	KeyPrefix string  `json:"key_prefix"`
-	Scopes    []string `json:"scopes"`
-}
-
 // CloudCreateRequest is the body for POST /clouds.
 type CloudCreateRequest struct {
 	Provider            string  `json:"provider"`
