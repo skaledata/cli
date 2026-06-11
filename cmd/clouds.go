@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -57,11 +58,13 @@ func init() {
 	cloudsSetupCmd.Flags().String("name", "", "Display name for this cloud connection")
 	cloudsSetupCmd.Flags().String("region", "", "Default region")
 	// GCP
-	cloudsSetupCmd.Flags().String("project-id", "", "GCP project ID")
+	cloudsSetupCmd.Flags().String("project-id", "", "GCP project ID (default: prompt to select)")
 	// AWS
-	cloudsSetupCmd.Flags().String("aws-region", "", "AWS region (default: us-east-1)")
+	cloudsSetupCmd.Flags().String("aws-region", "", "AWS region (default: prompt with detected)")
+	cloudsSetupCmd.Flags().String("aws-profile", "", "AWS named profile (default: prompt to select)")
 	// Azure
 	cloudsSetupCmd.Flags().String("azure-resource-group", "skaledata-deployer", "Azure resource group name")
+	cloudsSetupCmd.Flags().String("azure-subscription", "", "Azure subscription ID (default: prompt to select)")
 }
 
 func runCloudsList(cmd *cobra.Command, args []string) error {
@@ -137,28 +140,34 @@ func runCloudsVerify(cmd *cobra.Command, args []string) error {
 // --- GCP setup ---
 
 func setupGCP(cmd *cobra.Command, client *api.Client, displayName, region string) error {
-	projectID, _ := cmd.Flags().GetString("project-id")
+	projectIDFlag, _ := cmd.Flags().GetString("project-id")
+	projectID := projectIDFlag
 
-	// Try to detect project from gcloud
-	if projectID == "" {
-		out, err := exec.Command("gcloud", "config", "get-value", "project").Output()
-		if err == nil {
-			projectID = strings.TrimSpace(string(out))
-		}
-	}
 	if projectID == "" {
 		var err error
-		projectID, err = promptInput("GCP project ID")
+		projectID, err = selectGCPProject()
 		if err != nil {
 			return err
 		}
 	}
 
+	// Make the setup script (gcloud commands) use the chosen project regardless
+	// of the user's currently active gcloud config.
+	os.Setenv("CLOUDSDK_CORE_PROJECT", projectID)
+
 	if displayName == "" {
-		displayName = "GCP — " + projectID
+		var err error
+		displayName, err = promptInputDefault("Display name", "GCP — "+projectID)
+		if err != nil {
+			return err
+		}
 	}
 	if region == "" {
-		region = "us-central1"
+		var err error
+		region, err = promptInputDefault("Region", "us-central1")
+		if err != nil {
+			return err
+		}
 	}
 
 	saEmail := fmt.Sprintf("skaledata-deployer@%s.iam.gserviceaccount.com", projectID)
@@ -212,17 +221,34 @@ func setupGCP(cmd *cobra.Command, client *api.Client, displayName, region string
 // --- AWS setup ---
 
 func setupAWS(cmd *cobra.Command, client *api.Client, displayName, region string) error {
-	awsRegion, _ := cmd.Flags().GetString("aws-region")
+	awsProfileFlag, _ := cmd.Flags().GetString("aws-profile")
+	awsRegionFlag, _ := cmd.Flags().GetString("aws-region")
 
-	// Detect account ID from AWS CLI
-	out, err := exec.Command("aws", "sts", "get-caller-identity", "--query", "Account", "--output", "text").Output()
-	if err != nil {
-		return fmt.Errorf("could not detect AWS account — ensure 'aws' CLI is authenticated: %w", err)
+	// Select profile (or use flag) and resolve account ID
+	awsProfile := awsProfileFlag
+	var accountID string
+	if awsProfile == "" {
+		var err error
+		awsProfile, accountID, err = selectAWSProfile()
+		if err != nil {
+			return err
+		}
+	} else {
+		out, err := exec.Command("aws", "sts", "get-caller-identity",
+			"--query", "Account", "--output", "text", "--profile", awsProfile).Output()
+		if err != nil {
+			return fmt.Errorf("could not use AWS profile %q — check credentials: %w", awsProfile, err)
+		}
+		accountID = strings.TrimSpace(string(out))
 	}
-	accountID := strings.TrimSpace(string(out))
 
+	// Propagate the chosen profile to the setup script and any subsequent aws calls.
+	os.Setenv("AWS_PROFILE", awsProfile)
+
+	// Region default: --aws-region → `aws configure get region` for this profile → us-east-1
+	awsRegion := awsRegionFlag
 	if awsRegion == "" {
-		out, err := exec.Command("aws", "configure", "get", "region").Output()
+		out, err := exec.Command("aws", "configure", "get", "region", "--profile", awsProfile).Output()
 		if err == nil && strings.TrimSpace(string(out)) != "" {
 			awsRegion = strings.TrimSpace(string(out))
 		} else {
@@ -233,7 +259,18 @@ func setupAWS(cmd *cobra.Command, client *api.Client, displayName, region string
 	roleARN := fmt.Sprintf("arn:aws:iam::%s:role/SkaleDataDeployer", accountID)
 
 	if displayName == "" {
-		displayName = "AWS — " + accountID
+		var err error
+		displayName, err = promptInputDefault("Display name", "AWS — "+accountID)
+		if err != nil {
+			return err
+		}
+	}
+	if awsRegionFlag == "" {
+		var err error
+		awsRegion, err = promptInputDefault("AWS region", awsRegion)
+		if err != nil {
+			return err
+		}
 	}
 	if region == "" {
 		region = awsRegion
@@ -289,26 +326,57 @@ func setupAWS(cmd *cobra.Command, client *api.Client, displayName, region string
 // --- Azure setup ---
 
 func setupAzure(cmd *cobra.Command, client *api.Client, displayName, region string) error {
-	resourceGroup, _ := cmd.Flags().GetString("azure-resource-group")
+	resourceGroupFlag, _ := cmd.Flags().GetString("azure-resource-group")
+	subFlag, _ := cmd.Flags().GetString("azure-subscription")
 
-	// Detect subscription + tenant from az CLI
-	subOut, err := exec.Command("az", "account", "show", "--query", "id", "-o", "tsv").Output()
-	if err != nil {
-		return fmt.Errorf("could not detect Azure subscription — ensure 'az' CLI is authenticated: %w", err)
+	// Select subscription (or use flag) and resolve tenant
+	var subscriptionID, tenantID string
+	if subFlag == "" {
+		var err error
+		subscriptionID, tenantID, err = selectAzureSubscription()
+		if err != nil {
+			return err
+		}
+	} else {
+		subscriptionID = subFlag
+		out, err := exec.Command("az", "account", "show",
+			"--subscription", subscriptionID, "--query", "tenantId", "-o", "tsv").Output()
+		if err != nil {
+			return fmt.Errorf("could not look up tenant for subscription %q: %w", subscriptionID, err)
+		}
+		tenantID = strings.TrimSpace(string(out))
 	}
-	subscriptionID := strings.TrimSpace(string(subOut))
 
-	tenantOut, err := exec.Command("az", "account", "show", "--query", "tenantId", "-o", "tsv").Output()
-	if err != nil {
-		return fmt.Errorf("could not detect Azure tenant: %w", err)
+	// Make az CLI calls (including the setup script) target the chosen subscription.
+	// Skip the mutating `az account set` if it's already the active sub.
+	if cur, err := exec.Command("az", "account", "show", "--query", "id", "-o", "tsv").Output(); err != nil ||
+		strings.TrimSpace(string(cur)) != subscriptionID {
+		if err := exec.Command("az", "account", "set", "--subscription", subscriptionID).Run(); err != nil {
+			return fmt.Errorf("set active Azure subscription: %w", err)
+		}
 	}
-	tenantID := strings.TrimSpace(string(tenantOut))
 
 	if displayName == "" {
-		displayName = "Azure — " + subscriptionID[:8]
+		var err error
+		displayName, err = promptInputDefault("Display name", "Azure — "+subscriptionID[:8])
+		if err != nil {
+			return err
+		}
 	}
 	if region == "" {
-		region = "eastus"
+		var err error
+		region, err = promptInputDefault("Location", "eastus")
+		if err != nil {
+			return err
+		}
+	}
+	resourceGroup := resourceGroupFlag
+	if !cmd.Flags().Changed("azure-resource-group") {
+		var err error
+		resourceGroup, err = promptInputDefault("Resource group", resourceGroupFlag)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Step 1: Run setup script
@@ -479,6 +547,194 @@ func promptInput(label string) (string, error) {
 		return "", fmt.Errorf("%s cannot be empty", label)
 	}
 	return val, nil
+}
+
+// promptInputDefault prompts with a default in brackets. Empty input accepts
+// the default. An empty default still requires input.
+func promptInputDefault(label, defaultVal string) (string, error) {
+	if defaultVal != "" {
+		fmt.Printf("%s [%s]: ", label, defaultVal)
+	} else {
+		fmt.Printf("%s: ", label)
+	}
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	val := strings.TrimSpace(scanner.Text())
+	if val == "" {
+		if defaultVal == "" {
+			return "", fmt.Errorf("%s cannot be empty", label)
+		}
+		return defaultVal, nil
+	}
+	return val, nil
+}
+
+// --- Profile/credential selectors ---
+
+type awsProfileInfo struct {
+	Name      string
+	AccountID string
+	Err       string
+}
+
+// selectAWSProfile lists configured AWS profiles, probes each for an account
+// ID via STS, and lets the user pick one. Returns the profile name + account
+// ID. Skips the picker when exactly one profile has valid credentials.
+func selectAWSProfile() (string, string, error) {
+	out, err := exec.Command("aws", "configure", "list-profiles").Output()
+	if err != nil {
+		return "", "", fmt.Errorf("list AWS profiles — ensure 'aws' CLI v2 is installed and configured: %w", err)
+	}
+	names := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(names) == 0 || (len(names) == 1 && names[0] == "") {
+		return "", "", fmt.Errorf("no AWS profiles configured — run 'aws configure' or 'aws sso configure'")
+	}
+
+	profiles := make([]awsProfileInfo, 0, len(names))
+	valid := 0
+	for _, name := range names {
+		info := awsProfileInfo{Name: name}
+		idOut, err := exec.Command("aws", "sts", "get-caller-identity",
+			"--query", "Account", "--output", "text", "--profile", name).Output()
+		if err != nil {
+			info.Err = "creds invalid or expired"
+		} else {
+			info.AccountID = strings.TrimSpace(string(idOut))
+			valid++
+		}
+		profiles = append(profiles, info)
+	}
+
+	if valid == 0 {
+		return "", "", fmt.Errorf("no AWS profile has valid credentials — try 'aws sso login' or 'aws configure'")
+	}
+	if valid == 1 {
+		for _, p := range profiles {
+			if p.AccountID != "" {
+				fmt.Printf("  Using AWS profile: %s (account %s)\n", p.Name, p.AccountID)
+				return p.Name, p.AccountID, nil
+			}
+		}
+	}
+
+	options := make([]prompt.Option, 0, valid)
+	for _, p := range profiles {
+		if p.AccountID == "" {
+			continue
+		}
+		options = append(options, prompt.Option{
+			Label: fmt.Sprintf("%s (account %s)", p.Name, p.AccountID),
+			Value: p.Name,
+		})
+	}
+	selected, err := prompt.Select("Select AWS profile:", options)
+	if err != nil {
+		return "", "", err
+	}
+	for _, p := range profiles {
+		if p.Name == selected {
+			return p.Name, p.AccountID, nil
+		}
+	}
+	return "", "", fmt.Errorf("unexpected: selected profile not found in list")
+}
+
+// selectGCPProject lists projects the user has access to and lets them pick.
+// The active gcloud project (if any) is shown first.
+func selectGCPProject() (string, error) {
+	out, err := exec.Command("gcloud", "projects", "list", "--format=value(projectId)").Output()
+	if err != nil {
+		return "", fmt.Errorf("list GCP projects — ensure 'gcloud' CLI is installed and authenticated: %w", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) == 0 || (len(lines) == 1 && lines[0] == "") {
+		return "", fmt.Errorf("no GCP projects accessible — run 'gcloud auth login'")
+	}
+
+	active := ""
+	if out, err := exec.Command("gcloud", "config", "get-value", "project").Output(); err == nil {
+		active = strings.TrimSpace(string(out))
+	}
+
+	if len(lines) == 1 {
+		fmt.Printf("  Using GCP project: %s\n", lines[0])
+		return lines[0], nil
+	}
+
+	options := make([]prompt.Option, 0, len(lines))
+	if active != "" {
+		for _, name := range lines {
+			if name == active {
+				options = append(options, prompt.Option{Label: name + " (active)", Value: name})
+				break
+			}
+		}
+	}
+	for _, name := range lines {
+		if name == active {
+			continue
+		}
+		options = append(options, prompt.Option{Label: name, Value: name})
+	}
+	return prompt.Select("Select GCP project:", options)
+}
+
+type azureSubInfo struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	TenantID  string `json:"tenantId"`
+	IsDefault bool   `json:"isDefault"`
+}
+
+// selectAzureSubscription lists subscriptions visible to az CLI and lets the
+// user pick. Returns subscription ID + tenant ID. The default subscription
+// (if any) is shown first.
+func selectAzureSubscription() (string, string, error) {
+	out, err := exec.Command("az", "account", "list", "--output", "json").Output()
+	if err != nil {
+		return "", "", fmt.Errorf("list Azure subscriptions — ensure 'az' CLI is installed and authenticated: %w", err)
+	}
+	var subs []azureSubInfo
+	if err := json.Unmarshal(out, &subs); err != nil {
+		return "", "", fmt.Errorf("parse az account list output: %w", err)
+	}
+	if len(subs) == 0 {
+		return "", "", fmt.Errorf("no Azure subscriptions — run 'az login'")
+	}
+
+	if len(subs) == 1 {
+		fmt.Printf("  Using Azure subscription: %s (%s)\n", subs[0].Name, subs[0].ID)
+		return subs[0].ID, subs[0].TenantID, nil
+	}
+
+	options := make([]prompt.Option, 0, len(subs))
+	for _, s := range subs {
+		if s.IsDefault {
+			options = append(options, prompt.Option{
+				Label: fmt.Sprintf("%s — %s (default)", s.Name, s.ID),
+				Value: s.ID,
+			})
+		}
+	}
+	for _, s := range subs {
+		if s.IsDefault {
+			continue
+		}
+		options = append(options, prompt.Option{
+			Label: fmt.Sprintf("%s — %s", s.Name, s.ID),
+			Value: s.ID,
+		})
+	}
+	selectedID, err := prompt.Select("Select Azure subscription:", options)
+	if err != nil {
+		return "", "", err
+	}
+	for _, s := range subs {
+		if s.ID == selectedID {
+			return s.ID, s.TenantID, nil
+		}
+	}
+	return "", "", fmt.Errorf("unexpected: selected subscription not found in list")
 }
 
 func cloudAccount(c *api.Cloud) string {
