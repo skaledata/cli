@@ -223,3 +223,22 @@ type CloudTestResponse struct {
 	} `json:"impersonation"`
 	Preflight map[string]any `json:"preflight"`
 }
+
+// StaleVolumeAttachment describes a Kubernetes VolumeAttachment object
+// pointing at a node that no longer exists — left behind when a node is
+// force-terminated without a graceful drain. Blocks CNPG/PVC workloads
+// from rescheduling with `Multi-Attach error`.
+type StaleVolumeAttachment struct {
+	Name     string `json:"name"`
+	NodeName string `json:"node_name"`
+	PVName   string `json:"pv_name"`
+	Attached bool   `json:"attached"`
+}
+
+type ClusterDoctorResponse struct {
+	StaleVolumeAttachments []StaleVolumeAttachment `json:"stale_volume_attachments"`
+}
+
+type ClusterDoctorFixResponse struct {
+	DeletedVolumeAttachments []string `json:"deleted_volume_attachments"`
+}
