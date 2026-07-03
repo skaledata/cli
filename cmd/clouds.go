@@ -8,11 +8,20 @@ import (
 	"os/exec"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/skaledata/cli/internal/api"
 	"github.com/skaledata/cli/internal/prompt"
 	"github.com/spf13/cobra"
 )
+
+// cloudTestTimeout is the per-request budget for POST /clouds/test.
+// The server retries STS/OIDC AccessDenied with backoff for up to ~75s
+// to absorb IAM propagation lag right after the customer runs the
+// setup script; 120s gives us margin. This is intentionally scoped to
+// just this endpoint — the shared client's 30s default stays snappy
+// for every other call.
+const cloudTestTimeout = 120 * time.Second
 
 var cloudsCmd = &cobra.Command{
 	Use:     "clouds",
@@ -181,9 +190,9 @@ func setupGCP(cmd *cobra.Command, client *api.Client, displayName, region string
 	// Step 2: Test connection
 	fmt.Println("\n  Verifying connection...")
 	var testResult api.CloudTestResponse
-	if err := client.Post(
+	if err := client.PostWithTimeout(
 		fmt.Sprintf("/clouds/test?provider=gcp&project_id=%s", projectID),
-		nil, &testResult,
+		nil, &testResult, cloudTestTimeout,
 	); err != nil {
 		return fmt.Errorf("verification failed: %w", err)
 	}
@@ -256,7 +265,14 @@ func setupAWS(cmd *cobra.Command, client *api.Client, displayName, region string
 		}
 	}
 
-	roleARN := fmt.Sprintf("arn:aws:iam::%s:role/SkaleDataDeployer", accountID)
+	// Must match the ROLE_NAME baked into the server-generated setup
+	// script (see apps/api/api/routers/clouds.py:_get_aws_setup_script).
+	// Since Phase 4 of the per-job IAM scoping rollout (completed
+	// 2026-06-15) the server only emits the V2 role — a v1 ARN either
+	// doesn't exist in the customer account or points at a stale trust
+	// policy, in which case STS returns AccessDenied and /clouds/test
+	// hangs its full 75s retry window.
+	roleARN := fmt.Sprintf("arn:aws:iam::%s:role/SkaleDataDeployerV2", accountID)
 
 	if displayName == "" {
 		var err error
@@ -285,9 +301,9 @@ func setupAWS(cmd *cobra.Command, client *api.Client, displayName, region string
 	// Step 2: Test connection
 	fmt.Println("\n  Verifying connection...")
 	var testResult api.CloudTestResponse
-	if err := client.Post(
+	if err := client.PostWithTimeout(
 		fmt.Sprintf("/clouds/test?provider=aws&aws_role_arn=%s", roleARN),
-		nil, &testResult,
+		nil, &testResult, cloudTestTimeout,
 	); err != nil {
 		return fmt.Errorf("verification failed: %w", err)
 	}
@@ -396,10 +412,10 @@ func setupAzure(cmd *cobra.Command, client *api.Client, displayName, region stri
 	// Step 2: Test connection
 	fmt.Println("  Verifying connection...")
 	var testResult api.CloudTestResponse
-	if err := client.Post(
+	if err := client.PostWithTimeout(
 		fmt.Sprintf("/clouds/test?provider=azure&azure_tenant_id=%s&azure_client_id=%s&azure_subscription_id=%s",
 			tenantID, clientID, subscriptionID),
-		nil, &testResult,
+		nil, &testResult, cloudTestTimeout,
 	); err != nil {
 		return fmt.Errorf("verification failed: %w", err)
 	}
