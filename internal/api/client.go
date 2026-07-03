@@ -40,14 +40,7 @@ func NewClient() (*Client, error) {
 	return &Client{
 		BaseURL: config.APIURL(),
 		HTTPClient: &http.Client{
-			// Cloud setup verification (POST /clouds/test?provider=aws) can
-			// take up to ~75s because the server retries STS AccessDenied
-			// with exponential backoff to absorb IAM propagation lag right
-			// after the customer's setup script creates the role. 30s (the
-			// prior value) tripped every fresh AWS/Azure onboarding on a
-			// context deadline before the server could finish its retry
-			// loop. Every other endpoint returns in well under a second.
-			Timeout: 120 * time.Second,
+			Timeout: 30 * time.Second,
 		},
 		authHeader: auth,
 	}, nil
@@ -66,6 +59,22 @@ func (c *Client) Get(path string, result interface{}) error {
 // Post performs an authenticated POST request.
 func (c *Client) Post(path string, body, result interface{}) error {
 	return c.do("POST", path, body, result)
+}
+
+// PostWithTimeout performs an authenticated POST with a caller-supplied
+// timeout — use for endpoints that legitimately need longer than the
+// default (30s) client timeout. Go's http.Client.Timeout is a hard
+// ceiling that a per-request context.WithTimeout can only shrink, so
+// this spins up a dedicated http.Client for the call rather than
+// mutating the shared client's Timeout.
+//
+// Only use this for endpoints that server-side may exceed 30s. Right
+// now that's POST /clouds/test (provider=aws|azure), which retries STS
+// AccessDenied with backoff for up to ~75s to absorb IAM propagation
+// lag right after the customer runs the setup script.
+func (c *Client) PostWithTimeout(path string, body, result interface{}, timeout time.Duration) error {
+	slowClient := &http.Client{Timeout: timeout}
+	return c.doWithClient(slowClient, "POST", path, body, result)
 }
 
 // Put performs an authenticated PUT request.
@@ -147,6 +156,10 @@ func (c *Client) PostMultipart(path, contentType string, body []byte, result int
 }
 
 func (c *Client) do(method, path string, body, result interface{}) error {
+	return c.doWithClient(c.HTTPClient, method, path, body, result)
+}
+
+func (c *Client) doWithClient(httpClient *http.Client, method, path string, body, result interface{}) error {
 	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -167,7 +180,7 @@ func (c *Client) do(method, path string, body, result interface{}) error {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "skaledata-cli/0.1.0")
 
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
