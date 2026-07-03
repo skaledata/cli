@@ -40,7 +40,14 @@ func NewClient() (*Client, error) {
 	return &Client{
 		BaseURL: config.APIURL(),
 		HTTPClient: &http.Client{
-			Timeout: 30 * time.Second,
+			// Cloud setup verification (POST /clouds/test?provider=aws) can
+			// take up to ~75s because the server retries STS AccessDenied
+			// with exponential backoff to absorb IAM propagation lag right
+			// after the customer's setup script creates the role. 30s (the
+			// prior value) tripped every fresh AWS/Azure onboarding on a
+			// context deadline before the server could finish its retry
+			// loop. Every other endpoint returns in well under a second.
+			Timeout: 120 * time.Second,
 		},
 		authHeader: auth,
 	}, nil

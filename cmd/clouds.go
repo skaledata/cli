@@ -256,7 +256,14 @@ func setupAWS(cmd *cobra.Command, client *api.Client, displayName, region string
 		}
 	}
 
-	roleARN := fmt.Sprintf("arn:aws:iam::%s:role/SkaleDataDeployer", accountID)
+	// Must match the ROLE_NAME baked into the server-generated setup
+	// script (see apps/api/api/routers/clouds.py:_get_aws_setup_script).
+	// Since Phase 4 of the per-job IAM scoping rollout (completed
+	// 2026-06-15) the server only emits the V2 role — a v1 ARN either
+	// doesn't exist in the customer account or points at a stale trust
+	// policy, in which case STS returns AccessDenied and /clouds/test
+	// hangs its full 75s retry window.
+	roleARN := fmt.Sprintf("arn:aws:iam::%s:role/SkaleDataDeployerV2", accountID)
 
 	if displayName == "" {
 		var err error
