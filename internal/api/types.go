@@ -121,10 +121,26 @@ type Job struct {
 	CreatedAt     time.Time  `json:"created_at"`
 }
 
-// DataPlaneTokenResponse from POST /clusters/{id}/data-plane-token.
-type DataPlaneTokenResponse struct {
-	URL       string `json:"url"`
-	ExpiresIn int    `json:"expires_in"`
+// AppTokenRequest is the body for POST /applications/{id}/app-token.
+// TTLSeconds is a hint the server clamps to a hard maximum; omit for the
+// server default.
+type AppTokenRequest struct {
+	TTLSeconds int `json:"ttl_seconds,omitempty"`
+}
+
+// AppTokenResponse from POST /applications/{id}/app-token. Returns a
+// short-lived, audience-scoped bearer token for calling an application's
+// own REST API (Airflow, Airbyte, ...) directly — distinct from the 8h
+// session JWT used against the SkaleData control plane. The token is
+// scoped to this one app instance and carries the caller's existing
+// permissions; validate it downstream, never persist it.
+type AppTokenResponse struct {
+	Token     string    `json:"token"`
+	TokenType string    `json:"token_type"`
+	AppType   string    `json:"app_type"`
+	BaseURL   string    `json:"base_url"`
+	ExpiresAt time.Time `json:"expires_at"`
+	ExpiresIn int       `json:"expires_in"`
 }
 
 // DeployImageRequest is the body for POST /clusters/{id}/deploy-image.

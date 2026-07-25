@@ -87,6 +87,17 @@ func (c *Client) Delete(path string, result interface{}) error {
 	return c.do("DELETE", path, nil, result)
 }
 
+// MintAppToken exchanges the caller's session for a short-lived,
+// app-scoped token for the given application UUID. ttlSeconds is a hint;
+// pass 0 to accept the server default. The server clamps to a hard max.
+func (c *Client) MintAppToken(appID string, ttlSeconds int) (*AppTokenResponse, error) {
+	var resp AppTokenResponse
+	if err := c.Post("/applications/"+appID+"/app-token", AppTokenRequest{TTLSeconds: ttlSeconds}, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 // GetText performs an authenticated GET and returns the response as a string.
 func (c *Client) GetText(path string) (string, error) {
 	url := c.BaseURL + path

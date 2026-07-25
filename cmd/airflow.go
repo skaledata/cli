@@ -6,6 +6,7 @@ import (
 
 	"github.com/skaledata/cli/internal/airflow"
 	"github.com/skaledata/cli/internal/api"
+	"github.com/skaledata/cli/internal/app"
 	"github.com/skaledata/cli/internal/prompt"
 	"github.com/spf13/cobra"
 )
@@ -368,27 +369,7 @@ func selectCluster(client *api.Client) (string, error) {
 
 // resolveAppID finds the internal application UUID for a given cluster + app name.
 func resolveAppID(client *api.Client, clusterPublicID, appName string) (string, error) {
-	// Get the cluster's internal ID
-	var cluster api.Cluster
-	if err := client.Get("/clusters/"+clusterPublicID, &cluster); err != nil {
-		return "", err
-	}
-
-	var allApps []api.Application
-	if err := client.Get("/applications", &allApps); err != nil {
-		return "", err
-	}
-
-	for _, a := range allApps {
-		if a.ClusterID != cluster.ID || a.AppType != "airflow" {
-			continue
-		}
-		// Match by name, or take the first one if no name specified
-		if appName == "" || a.Name == appName {
-			return a.ID, nil
-		}
-	}
-	return "", fmt.Errorf("no matching Airflow application found")
+	return app.ResolveAppID(client, clusterPublicID, "airflow", appName)
 }
 
 // selectAirflowApp finds airflow apps on a cluster and prompts if there are multiple.
