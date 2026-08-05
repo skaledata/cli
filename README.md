@@ -1,74 +1,28 @@
-# SkaleData CLI
+# SkaleData CLI (`skale`)
+
+> **Source has moved.** The `skale` CLI now lives in the SkaleData monorepo at
+> [`apps/cli`](https://github.com/skaledata/skaledata/tree/main/apps/cli) (SKD-200).
+> This repo is retained as the **public release/distribution host** — GitHub
+> releases + binaries are published here, and the Homebrew formula points here.
+> Releases are cut from the monorepo (`apps/cli/v*` tags); this repo's own build
+> workflows were removed. Issues/PRs against the CLI go in the monorepo.
 
 Manage clusters, apps, and deployments from your terminal.
 
 ## Install
 
-### Homebrew (macOS/Linux)
+### Homebrew (macOS/Linux) — recommended
 
 ```bash
-brew install skaledata/tap/skaledata
-```
-
-### Go
-
-```bash
-go install github.com/skaledata/cli@latest
+brew install skaledata/tap/skale
 ```
 
 ### Binary
 
-Download the latest release from [GitHub Releases](https://github.com/skaledata/cli/releases).
+Download the latest release from [Releases](https://github.com/skaledata/cli/releases) (assets are named `skale_<version>_<os>_<arch>.tar.gz`).
 
-## Quick Start
+> `go install` is not supported — the source lives in a private monorepo. Use Homebrew or a binary download.
 
-```bash
-# Authenticate
-skaledata login
+## Usage
 
-# Or use an API key (CI/headless)
-skaledata auth set-key sk_xxx
-
-# List clusters
-skaledata clusters list
-
-# Create a cluster
-skaledata clusters create --name my-cluster --cloud <cloud-id> --apps airflow
-
-# Scaffold a new Airflow project
-skaledata init airflow my-project
-
-# Deploy
-cd my-project
-skaledata deploy
-```
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `skaledata login` | Log in via browser |
-| `skaledata auth set-key` | Store API key for CI |
-| `skaledata clusters list` | List all clusters |
-| `skaledata clusters create` | Create a cluster (interactive) |
-| `skaledata clusters status <id>` | Detailed cluster info |
-| `skaledata clusters destroy <id>` | Destroy a cluster |
-| `skaledata apps list` | List all applications |
-| `skaledata apps add <type>` | Add an app to a cluster |
-| `skaledata apps open <cluster-id>` | Open app in browser |
-| `skaledata deploy` | Build, push, and deploy |
-| `skaledata deploy status` | Latest deploy status |
-| `skaledata init airflow <name>` | Scaffold Airflow project |
-| `skaledata init airbyte <name>` | Scaffold Airbyte project |
-| `skaledata init docs <name>` | Scaffold docs project |
-| `skaledata billing` | Show plan and usage |
-
-## Configuration
-
-Config is stored in `~/.config/skaledata/config.yaml`.
-
-Override the API URL with `SKALEDATA_API_URL` or `api_url` in config.
-
-## License
-
-MIT
+Run `skale --help`, or see the docs at [skaledata.com](https://skaledata.com).
